@@ -3,7 +3,6 @@ const std = @import("std");
 const c = @cImport({
     @cInclude("proc/sysinfo.h");
     @cInclude("proc/version.h");
-    @cInclude("unistd.h");
 });
 
 const Version = struct {
@@ -62,25 +61,6 @@ fn getMemInfo() Memory {
     };
 }
 
-const Title = struct {
-    user: []u8,
-    hostname: []u8,
-};
-
-const HostnameError = error{InvalidExitCode};
-const MAX_HOSTNAME_LEN: usize = 64;
-
-fn getHostname(dest: []u8) HostnameError!void {
-    var hostname: [MAX_HOSTNAME_LEN]u8 = undefined;
-    const res = c.gethostname(&hostname, MAX_HOSTNAME_LEN);
-
-    if (res != 0) {
-        return HostnameError.InvalidExitCode;
-    }
-
-    @memcpy(dest, &hostname);
-}
-
 const LAYOUT =
     \\ {s}
     \\ kernel   {s}
@@ -95,15 +75,10 @@ pub fn main() !void {
     var allocator = arena.allocator();
 
     const user = try std.process.getEnvVarOwned(allocator, "USER");
-    var hostname: [MAX_HOSTNAME_LEN]u8 = undefined;
-    try getHostname(&hostname);
+    var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
+    const hostname = try std.os.gethostname(&hostname_buf);
 
-    var idx = std.mem.indexOf(u8, &hostname, "\x00");
-    if (idx == null) {
-        idx = MAX_HOSTNAME_LEN;
-    }
-
-    var title_string = try std.fmt.allocPrint(allocator, "{s}@{s}", .{ user, hostname[0..idx.?] });
+    var title_string = try std.fmt.allocPrint(allocator, "{s}@{s}", .{ user, hostname });
 
     const version = getLinuxVersion();
     var version_string = try std.fmt.allocPrint(allocator, "{}.{}.{}", .{ version.major, version.minor, version.patch });
