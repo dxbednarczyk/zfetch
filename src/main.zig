@@ -94,5 +94,6 @@ pub fn main() !void {
     const uptime = get_uptime();
     const meminfo = get_meminfo();
 
-    std.debug.print(LAYOUT, .{ user, hostname, os_release, version.release, uptime.hours, uptime.minutes, meminfo.used, meminfo.available });
+    var stdout = std.io.getStdOut().writer();
+    stdout.print(LAYOUT, .{ user, hostname, os_release, version.release, uptime.hours, uptime.minutes, meminfo.used, meminfo.available }) catch return;
 }
