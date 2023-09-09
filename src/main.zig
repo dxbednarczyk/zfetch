@@ -1,24 +1,34 @@
 const std = @import("std");
+const proc = @cImport(@cInclude("proc/sysinfo.h"));
 
-const c = @cImport({
-    @cInclude("proc/sysinfo.h");
-    @cInclude("proc/version.h");
-});
+const QUOTES_OFFSET = 2;
+const EMPTY_STRING: []u8 = undefined;
 
-const Version = struct {
-    major: i32,
-    minor: i32,
-    patch: i32,
-};
+pub fn get_os_release(allocator: std.mem.Allocator) ![]u8 {
+    var os_release: []u8 = undefined;
 
-fn getLinuxVersion() Version {
-    var linux_version = c.procps_linux_version();
+    const file = try std.fs.openFileAbsolute("/etc/os-release", .{});
+    const file_stat = try file.stat();
 
-    return Version{
-        .major = c.LINUX_VERSION_MAJOR(linux_version),
-        .minor = c.LINUX_VERSION_MINOR(linux_version),
-        .patch = c.LINUX_VERSION_PATCH(linux_version),
-    };
+    const read_bytes = try file.readToEndAlloc(allocator, file_stat.size);
+    var lines = std.mem.tokenizeAny(u8, read_bytes, "\n");
+
+    while (lines.next()) |line| {
+        var tokens = std.mem.tokenizeAny(u8, line, "=");
+
+        const key = tokens.next().?;
+        const value_with_quotes = tokens.next().?;
+
+        var value = try allocator.alloc(u8, value_with_quotes.len - QUOTES_OFFSET);
+        _ = std.mem.replace(u8, value_with_quotes, "\"", "", value);
+
+        if (std.mem.eql(u8, key, "PRETTY_NAME")) {
+            os_release = value;
+            break;
+        }
+    }
+
+    return os_release;
 }
 
 const Uptime = struct {
@@ -26,17 +36,17 @@ const Uptime = struct {
     minutes: i32,
 };
 
-fn getUptime() Uptime {
+fn get_uptime() Uptime {
     var uptime: f64 = 0;
     var idle: f64 = 0;
-    _ = c.uptime(&uptime, &idle);
+    _ = proc.uptime(&uptime, &idle);
 
     var upsecs: i32 = @intFromFloat(uptime);
 
-    var h = @divTrunc(upsecs, 3600);
+    const h = @divTrunc(upsecs, 3600);
     upsecs -= 3600 * h;
 
-    var m = @divTrunc(upsecs, 60);
+    const m = @divTrunc(upsecs, 60);
 
     return Uptime{
         .hours = h,
@@ -49,23 +59,24 @@ const Memory = struct {
     available: c_ulong,
 };
 
-fn getMemInfo() Memory {
-    c.meminfo();
+fn get_meminfo() Memory {
+    proc.meminfo();
 
-    var mb_used = @divTrunc(c.kb_main_used, 1000);
-    var mb_available = @divTrunc(c.kb_main_available, 1000);
+    const mb_used = @divTrunc(proc.kb_main_used, 1000);
+    const mb_total = @divTrunc(proc.kb_main_total, 1000);
 
     return Memory{
         .used = mb_used,
-        .available = mb_available,
+        .available = mb_total,
     };
 }
 
 const LAYOUT =
-    \\ {s}
+    \\ {s}@{s}
+    \\ os       {s}
     \\ kernel   {s}
-    \\ uptime   {s}
-    \\ memory   {s}
+    \\ uptime   {d}h {d}m
+    \\ memory   {d}M / {d}M
     \\
 ;
 
@@ -78,16 +89,10 @@ pub fn main() !void {
     var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
     const hostname = try std.os.gethostname(&hostname_buf);
 
-    var title_string = try std.fmt.allocPrint(allocator, "{s}@{s}", .{ user, hostname });
+    const os_release = try get_os_release(allocator);
+    const version = std.os.uname();
+    const uptime = get_uptime();
+    const meminfo = get_meminfo();
 
-    const version = getLinuxVersion();
-    var version_string = try std.fmt.allocPrint(allocator, "{}.{}.{}", .{ version.major, version.minor, version.patch });
-
-    const uptime = getUptime();
-    var uptime_string = try std.fmt.allocPrint(allocator, "{}h {}m", .{ uptime.hours, uptime.minutes });
-
-    const meminfo = getMemInfo();
-    var meminfo_string = try std.fmt.allocPrint(allocator, "{}M / {}M", .{ meminfo.used, meminfo.available });
-
-    std.debug.print(LAYOUT, .{ title_string, version_string, uptime_string, meminfo_string });
+    std.debug.print(LAYOUT, .{ user, hostname, os_release, version.release, uptime.hours, uptime.minutes, meminfo.used, meminfo.available });
 }
