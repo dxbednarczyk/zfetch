@@ -72,11 +72,11 @@ fn get_meminfo() Memory {
 }
 
 const LAYOUT =
-    \\ {s}@{s}
-    \\ os       {s}
-    \\ kernel   {s}
-    \\ uptime   {d}h {d}m
-    \\ memory   {d}M / {d}M
+    \\{s}@{s}
+    \\os       {s}
+    \\kernel   {s}
+    \\uptime   {d}h {d}m
+    \\memory   {d}M / {d}M
     \\
 ;
 
