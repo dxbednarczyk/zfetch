@@ -1,7 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const util = @import("util.zig");
 
-const proc = @cImport(@cInclude("proc/sysinfo.h"));
+const meminfo = @cImport(@cInclude("libproc2/meminfo.h"));
+const misc = @cImport(@cInclude("libproc2/misc.h"));
 
 const OSRelease = struct {
     name: []u8,
@@ -14,27 +16,49 @@ const Uptime = struct {
 };
 
 const Memory = struct {
-    used: c_ulong,
-    available: c_ulong,
+    used: c_int,
+    total: c_int,
 };
 
 const LAYOUT =
     \\{s}@{s}
     \\os       {s} {s}
     \\kernel   {s}
-    \\uptime   {d}h {d}m
+    \\uptime   {s}
+    \\shell    {s}
     \\memory   {d}M / {d}M
     \\
 ;
 
-fn get_os_release(allocator: std.mem.Allocator) !OSRelease {
+fn getUsername(allocator: std.mem.Allocator, uid: std.os.uid_t) ![]const u8 {
+    const read_bytes = try util.readFile(allocator, "/etc/passwd");
+    var lines = std.mem.splitBackwardsAny(u8, read_bytes, "\n");
+    // skip newline at end of file
+    _ = lines.next();
+
+    while (lines.next()) |line| {
+        var tokens = std.mem.tokenizeAny(u8, line, ":");
+
+        const user = tokens.next().?;
+        _ = tokens.next();
+        const uid_token = tokens.next().?;
+
+        if (uid == try std.fmt.parseInt(u32, uid_token, 10)) {
+            const username = try allocator.alloc(u8, user.len);
+            std.mem.copyForwards(u8, username, user);
+
+            return username;
+        }
+    }
+
+    return "unknown";
+}
+
+fn getOSRelease(allocator: std.mem.Allocator) !OSRelease {
     var os_release: OSRelease = undefined;
 
-    const file = try std.fs.openFileAbsolute("/etc/os-release", .{});
-    const file_stat = try file.stat();
-
-    const read_bytes = try file.readToEndAlloc(allocator, file_stat.size);
-    var lines = std.mem.tokenizeAny(u8, read_bytes, "\n");
+    const read_bytes = try util.readFile(allocator, "/etc/os-release");
+    var lines = std.mem.splitAny(u8, read_bytes, "\n");
 
     while (lines.next()) |line| {
         var tokens = std.mem.tokenizeAny(u8, line, "=");
@@ -47,7 +71,7 @@ fn get_os_release(allocator: std.mem.Allocator) !OSRelease {
             const value = try allocator.alloc(u8, size);
 
             _ = std.mem.replace(u8, value_with_quotes, "\"", "", value);
-        
+
             os_release.name = value;
             break;
         }
@@ -58,34 +82,25 @@ fn get_os_release(allocator: std.mem.Allocator) !OSRelease {
     return os_release;
 }
 
-fn get_uptime() Uptime {
-    var uptime: f64 = 0;
-    var idle: f64 = 0;
-    _ = proc.uptime(&uptime, &idle);
+fn getMeminfo() Memory {
+    var info: ?*meminfo.struct_meminfo_info = null;
 
-    var upsecs: i32 = @intFromFloat(uptime);
+    const rc = meminfo.procps_meminfo_new(@ptrCast(&info));
+    if (rc < 0) {
+        switch (std.os.errno(rc)) {
+            .NOENT => std.debug.print("/proc/meminfo does not exist\n", .{}),
+            else => std.debug.print("failed to create meminfo struct\n", .{}),
+        }
 
-    const h = @divTrunc(upsecs, 3600);
-    upsecs -= 3600 * h;
+        std.os.exit(@as(u8, @intCast(-rc)));
+    }
 
-    const m = @divTrunc(upsecs, 60);
+    var memory: Memory = undefined;
 
-    return Uptime{
-        .hours = h,
-        .minutes = m,
-    };
-}
+    memory.used = @divTrunc(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_USED).*.result.s_int, 1024);
+    memory.total = @divTrunc(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_TOTAL).*.result.s_int, 1024);
 
-fn get_meminfo() Memory {
-    proc.meminfo();
-
-    const mb_used = @divTrunc(proc.kb_main_used, 1024);
-    const mb_total = @divTrunc(proc.kb_main_total, 1024);
-
-    return Memory{
-        .used = mb_used,
-        .available = mb_total,
-    };
+    return memory;
 }
 
 pub fn main() !void {
@@ -93,16 +108,17 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const user = try std.process.getEnvVarOwned(allocator, "USER");
+    const user = try getUsername(allocator, std.os.linux.getuid());
 
     var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
     const hostname = try std.os.gethostname(&hostname_buf);
 
-    const os_release = try get_os_release(allocator);
+    const os_release = try getOSRelease(allocator);
     const version = std.os.uname().release;
-    const uptime = get_uptime();
-    const meminfo = get_meminfo();
+    const uptime = misc.procps_uptime_sprint_short();
+    const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
+    const mem = getMeminfo();
 
     var stdout = std.io.getStdOut().writer();
-    try stdout.print(LAYOUT, .{ user, hostname, os_release.name, os_release.arch, version, uptime.hours, uptime.minutes, meminfo.used, meminfo.available });
+    try stdout.print(LAYOUT, .{ user, hostname, os_release.name, os_release.arch, version, uptime, shell, mem.used, mem.total });
 }

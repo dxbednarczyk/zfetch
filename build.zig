@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    exe.linkSystemLibraryName("procps");
+    exe.linkSystemLibraryName("proc2");
     exe.linkLibC();
 
     // This declares intent for the executable to be installed into the
