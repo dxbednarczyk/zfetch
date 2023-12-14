@@ -4,9 +4,9 @@ No colors or logos, just info.
 
 ```sh
 $ zfetch
-damian@DESKTOP-0QL4078
-os       Ubuntu 22.04.3 LTS
-kernel   5.15.90.1-microsoft-standard-WSL2
-uptime   9h 25m
-memory   801M / 16307M
+codespace@codespaces-51848f
+os       Ubuntu 20.04.6 LTS x86_64
+kernel   6.2.0-1018-azure
+uptime   1h 45m
+memory   2046M / 7929M
 ```
