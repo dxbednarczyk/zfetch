@@ -4,9 +4,10 @@ No colors or logos, just info.
 
 ```sh
 $ zfetch
-codespace@codespaces-51848f
-os       Ubuntu 20.04.6 LTS x86_64
-kernel   6.2.0-1018-azure
-uptime   1h 45m
-memory   2046M / 7929M
+damian@windows
+os       Ubuntu 23.04 x86_64
+kernel   5.15.133.1-microsoft-standard-WSL2
+uptime   up 3 hours, 12 minutes
+shell    /bin/bash
+memory   1060M / 15925M
 ```
