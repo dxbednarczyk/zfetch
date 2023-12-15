@@ -22,6 +22,7 @@ const Memory = struct {
 
 const LAYOUT =
     \\{s}@{s}
+    \\{s}
     \\os       {s} {s}
     \\kernel   {s}
     \\uptime   {s}
@@ -113,12 +114,16 @@ pub fn main() !void {
     var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
     const hostname = try std.os.gethostname(&hostname_buf);
 
+    const length_of_text = user.len + hostname.len + 1;
+    const separator = try allocator.alloc(u8, length_of_text);
+    @memset(separator, '-');
+
     const os_release = try getOSRelease(allocator);
     const version = std.os.uname().release;
-    const uptime = misc.procps_uptime_sprint_short();
+    const uptime = misc.procps_uptime_sprint_short()[3..];
     const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
     const mem = getMeminfo();
 
     var stdout = std.io.getStdOut().writer();
-    try stdout.print(LAYOUT, .{ user, hostname, os_release.name, os_release.arch, version, uptime, shell, mem.used, mem.total });
+    try stdout.print(LAYOUT, .{ user, hostname, separator, os_release.name, os_release.arch, version, uptime, shell, mem.used, mem.total });
 }
