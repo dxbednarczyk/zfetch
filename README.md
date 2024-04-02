@@ -1,13 +1,18 @@
 # zfetch
 
+Linux build depends on `libproc2` (any `procps` >= 4.0).
+
+Runs on `zig` v0.11.0.
+
 No colors or logos, just info.
 
 ```sh
 $ zfetch
-damian@windows
-os       Ubuntu 23.04 x86_64
-kernel   5.15.133.1-microsoft-standard-WSL2
-uptime   up 3 hours, 12 minutes
-shell    /bin/bash
-memory   1060M / 15925M
+damianbednarczyk@Damians-MBP
+----------------------------
+os       macOS 14.4.1 aarch64
+kernel   Darwin Kernel Version 23.4.0
+uptime   1d 16h 11m 14s
+shell    /bin/zsh
+memory   11283M / 18432M
 ```

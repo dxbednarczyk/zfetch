@@ -24,7 +24,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    exe.linkSystemLibraryName("proc2");
+    if (target.os_tag == .linux) {
+        exe.linkSystemLibrary("proc2");
+    }
+
     exe.linkLibC();
 
     // This declares intent for the executable to be installed into the
