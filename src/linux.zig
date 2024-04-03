@@ -86,7 +86,7 @@ pub fn fetch(allocator: std.mem.Allocator) !void {
     var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
     const hostname = try std.os.gethostname(&hostname_buf);
 
-    const length_of_text = user.len + hostname.len + 1;
+    const length_of_text = std.mem.len(user) + hostname.len + 1;
     const separator = try allocator.alloc(u8, length_of_text);
     @memset(separator, '-');
 
