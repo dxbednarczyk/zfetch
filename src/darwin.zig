@@ -7,7 +7,6 @@ const mach = @cImport(@cInclude("mach/mach.h"));
 const vm_stat = @cImport(@cInclude("mach/vm_statistics.h"));
 const host = @cImport(@cInclude("mach/host_info.h"));
 
-const pwd = @cImport(@cInclude("pwd.h"));
 const unistd = @cImport(@cInclude("unistd.h"));
 
 const B_MB_RATIO = 1048576;
@@ -17,7 +16,7 @@ const LAYOUT =
     \\{s}
     \\os       macOS {s} {s}
     \\kernel   {s}
-    \\uptime   {s}
+    \\uptime   up {s}
     \\shell    {s}
     \\memory   {d}M / {d}M
     \\
@@ -56,26 +55,6 @@ fn get_memory() !common.Memory {
         .used = @as(c_uint, @truncate(mb_total - mb_free)),
         .total = @as(c_uint, @truncate(mb_total)),
     };
-}
-
-fn get_username() [*c]u8 {
-    const uid = unistd.geteuid();
-    const pws = pwd.getpwuid(uid);
-
-    return pws.*.pw_name;
-}
-
-fn get_hostname(allocator: std.mem.Allocator) ![]const u8 {
-    var buf: [std.os.HOST_NAME_MAX]u8 = undefined;
-    const name = try std.os.gethostname(&buf);
-
-    var split_name = std.mem.splitScalar(u8, name, '.');
-    const next = split_name.next().?;
-
-    var hname = try allocator.alloc(u8, next.len);
-    @memcpy(hname, next);
-
-    return hname;
 }
 
 fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
@@ -159,14 +138,17 @@ fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
-    const memory = try get_memory();
-    const username = get_username();
-    const hostname = try get_hostname(allocator);
+    const username = common.get_username(unistd.geteuid());
+    const hostname = try common.get_hostname(allocator);
+
     const separator = try common.get_separator(allocator, std.mem.len(username), hostname.len);
+
     const os_release = try get_os_release(allocator);
     const kernel = try get_kernel(allocator);
-    const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
     const uptime = try get_uptime(allocator);
+    const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
+    const memory = try get_memory();
 
-    std.debug.print(LAYOUT, .{ username, hostname, separator, os_release.name, os_release.arch, kernel, uptime, shell, memory.used, memory.total });
+    var stdout = std.io.getStdOut().writer();
+    try stdout.print(LAYOUT, .{ username, hostname, separator, os_release.name, os_release.arch, kernel, uptime, shell, memory.used, memory.total });
 }

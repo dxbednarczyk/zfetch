@@ -6,8 +6,6 @@ const common = @import("common.zig");
 const meminfo = @cImport(@cInclude("libproc2/meminfo.h"));
 const misc = @cImport(@cInclude("libproc2/misc.h"));
 
-const pwd = @cImport(@cInclude("pwd.h"));
-
 const LAYOUT =
     \\{s}@{s}
     \\{s}
@@ -24,13 +22,6 @@ pub fn read_file(allocator: std.mem.Allocator, filename: []const u8) ![]u8 {
     const file_stat = try file.stat();
 
     return try file.readToEndAlloc(allocator, file_stat.size);
-}
-
-fn get_username() [*c]u8 {
-    const uid = std.os.linux.getuid();
-    const pws = pwd.getpwuid(uid);
-
-    return pws.*.pw_name;
 }
 
 fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
@@ -65,36 +56,30 @@ fn get_memory() common.Memory {
 
     const rc = meminfo.procps_meminfo_new(@ptrCast(&info));
     if (rc < 0) {
-        switch (std.os.errno(rc)) {
-            .NOENT => std.debug.print("/proc/meminfo does not exist\n", .{}),
-            else => std.debug.print("failed to create meminfo struct\n", .{}),
-        }
-
         std.os.exit(@as(u8, @intCast(-rc)));
     }
 
+    const used: c_uint = @intCast(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_USED).*.result.s_int);
+    const total: c_uint = @intCast(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_TOTAL).*.result.s_int);
+
     return common.Memory{
-        .used = @divTrunc(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_USED).*.result.s_int, 1024),
-        .total = @divTrunc(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_TOTAL).*.result.s_int, 1024),
+        .used = @divTrunc(used, 1024),
+        .total = @divTrunc(total, 1024),
     };
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
-    const user = get_username();
+    const user = common.get_username(std.os.linux.getuid());
+    const hostname = try common.get_hostname(allocator);
 
-    var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
-    const hostname = try std.os.gethostname(&hostname_buf);
-
-    const length_of_text = std.mem.len(user) + hostname.len + 1;
-    const separator = try allocator.alloc(u8, length_of_text);
-    @memset(separator, '-');
+    const separator = common.get_separator(allocator, std.mem.len(user), hostname.len);
 
     const os_release = try get_os_release(allocator);
-    const version = std.os.uname().release;
-    const uptime = misc.procps_uptime_sprint_short()[3..];
+    const kernel = std.os.uname().release;
+    const uptime = misc.procps_uptime_sprint_short();
     const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
     const memory = get_memory();
 
     var stdout = std.io.getStdOut().writer();
-    try stdout.print(LAYOUT, .{ user, hostname, separator, os_release.name, os_release.arch, version, uptime, shell, memory.used, memory.total });
+    try stdout.print(LAYOUT, .{ user, hostname, separator, os_release.name, os_release.arch, kernel, uptime, shell, memory.used, memory.total });
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -24,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    if (target.os_tag == .linux) {
+    if (builtin.os.tag == .linux) {
         exe.linkSystemLibrary("proc2");
     }
 

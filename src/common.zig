@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const pwd = @cImport(@cInclude("pwd.h"));
+
 pub const OSRelease = struct {
     name: []const u8,
     arch: []const u8,
@@ -21,4 +23,23 @@ pub fn get_separator(allocator: std.mem.Allocator, username_len: usize, hostname
     @memset(separator, '-');
 
     return separator;
+}
+
+pub fn get_username(uid: c_uint) [*c]u8 {
+    const pws = pwd.getpwuid(uid);
+
+    return pws.*.pw_name;
+}
+
+pub fn get_hostname(allocator: std.mem.Allocator) ![]const u8 {
+    var buf: [std.os.HOST_NAME_MAX]u8 = undefined;
+    const name = try std.os.gethostname(&buf);
+
+    var split_name = std.mem.splitScalar(u8, name, '.');
+    const next = split_name.next().?;
+
+    var hname = try allocator.alloc(u8, next.len);
+    @memcpy(hname, next);
+
+    return hname;
 }
