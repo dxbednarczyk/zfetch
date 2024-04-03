@@ -81,7 +81,7 @@ fn get_memory() common.Memory {
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
-    const user = try get_username();
+    const user = get_username();
 
     var hostname_buf: [std.os.HOST_NAME_MAX]u8 = undefined;
     const hostname = try std.os.gethostname(&hostname_buf);
