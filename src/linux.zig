@@ -6,6 +6,7 @@ const common = @import("common.zig");
 const meminfo = @cImport(@cInclude("libproc2/meminfo.h"));
 const misc = @cImport(@cInclude("libproc2/misc.h"));
 
+const QUOTATION_MARKS_LEN = 2;
 const LAYOUT =
     \\{s}@{s}
     \\{s}
@@ -17,18 +18,14 @@ const LAYOUT =
     \\
 ;
 
-pub fn read_file(allocator: std.mem.Allocator, filename: []const u8) ![]u8 {
-    const file = try std.fs.openFileAbsolute(filename, .{});
-    const file_stat = try file.stat();
-
-    return try file.readToEndAlloc(allocator, file_stat.size);
-}
-
 fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
     var os_release: common.OSRelease = undefined;
     os_release.arch = @tagName(builtin.cpu.arch);
 
-    const read_bytes = try read_file(allocator, "/etc/os-release");
+    const os_release_file = try std.fs.openFileAbsolute("/etc/os-release", .{});
+    const file_stat = try os_release_file.stat();
+
+    const read_bytes = try os_release_file.readToEndAlloc(allocator, file_stat.size);
     var lines = std.mem.splitAny(u8, read_bytes, "\n");
 
     while (lines.next()) |line| {
@@ -36,14 +33,12 @@ fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
 
         const key = tokens.next().?;
         if (std.mem.eql(u8, key, "PRETTY_NAME")) {
-            const value_with_quotes = tokens.next().?;
+            const value = tokens.next().?;
+            const pretty_name = try allocator.alloc(u8, value.len - QUOTATION_MARKS_LEN);
 
-            const size = std.mem.count(u8, value_with_quotes, "\"");
-            const value = try allocator.alloc(u8, value_with_quotes.len - size);
+            _ = std.mem.replace(u8, value, "\"", "", pretty_name);
 
-            _ = std.mem.replace(u8, value_with_quotes, "\"", "", value);
-
-            os_release.name = value;
+            os_release.name = pretty_name;
             break;
         }
     }
