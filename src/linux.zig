@@ -72,7 +72,7 @@ pub fn fetch(allocator: std.mem.Allocator) !void {
     const user = common.get_username(std.os.linux.getuid());
     const hostname = try common.get_hostname(allocator);
 
-    const separator = common.get_separator(allocator, std.mem.len(user), hostname.len);
+    const separator = try common.get_separator(allocator, std.mem.len(user), hostname.len);
 
     const os_release = try get_os_release(allocator);
     const kernel = std.os.uname().release;
