@@ -38,8 +38,8 @@ fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
         if (std.mem.eql(u8, key, "PRETTY_NAME")) {
             const value_with_quotes = tokens.next().?;
 
-            const size = std.mem.replacementSize(u8, value_with_quotes, "\"", "");
-            const value = try allocator.alloc(u8, size);
+            const size = std.mem.count(u8, value_with_quotes, "\"");
+            const value = try allocator.alloc(u8, value_with_quotes.len - size);
 
             _ = std.mem.replace(u8, value_with_quotes, "\"", "", value);
 

@@ -65,7 +65,7 @@ fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
 
     const trimmed = std.mem.trimRight(u8, &value, "\x00");
 
-    var trimmed_buf = try allocator.alloc(u8, trimmed.len);
+    const trimmed_buf = try allocator.alloc(u8, trimmed.len);
     @memcpy(trimmed_buf, trimmed);
 
     return common.OSRelease{ .name = trimmed_buf, .arch = @tagName(builtin.cpu.arch) };
@@ -77,7 +77,7 @@ fn get_kernel(allocator: std.mem.Allocator) ![]const u8 {
     var split_kern = std.mem.splitScalar(u8, &kern, ':');
     const next = split_kern.next().?;
 
-    var kernbuf = try allocator.alloc(u8, next.len);
+    const kernbuf = try allocator.alloc(u8, next.len);
     @memcpy(kernbuf, next);
 
     return kernbuf;
@@ -131,7 +131,7 @@ fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
     const printed = try std.fmt.allocPrint(allocator, "{s}", .{buf});
     const trimmed = std.mem.trimRight(u8, printed, "\x00");
 
-    var trimmed_buf = try allocator.alloc(u8, trimmed.len);
+    const trimmed_buf = try allocator.alloc(u8, trimmed.len);
     @memcpy(trimmed_buf, trimmed);
 
     return trimmed;
