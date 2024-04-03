@@ -34,9 +34,8 @@ fn get_username() [*c]u8 {
 }
 
 fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
-    var os_release = common.OSRelease{
-        .arch = @tagName(builtin.cpu.arch),
-    };
+    var os_release: common.OSRelease = undefined;
+    os_release.arch = @tagName(builtin.cpu.arch);
 
     const read_bytes = try read_file(allocator, "/etc/os-release");
     var lines = std.mem.splitAny(u8, read_bytes, "\n");
