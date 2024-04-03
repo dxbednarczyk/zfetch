@@ -104,13 +104,16 @@ fn get_kernel(allocator: std.mem.Allocator) ![]const u8 {
     return kernbuf;
 }
 
-// custom format duration, stripped out of std.fmt.fmtDuration but with
-// a space at the end of each separator + less values
-// worst case is 23 bytes:
-// XXy XXm XXd XXh XXm XXs
-fn uptime_formatter(allocator: std.mem.Allocator, upt: i64) ![]const u8 {
-    var val = upt;
+fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
+    const boottime = try sysctl_name(timeval, "kern.boottime");
+    const timestamp = std.time.timestamp();
 
+    var upt = (timestamp - boottime.tv_sec) * BILLION;
+
+    // custom format duration, stripped out of std.fmt.fmtDuration but with
+    // a space at the end of each separator + less values
+    // worst case is 23 bytes:
+    // XXy XXm XXd XXh XXm XXs
     var buf = std.mem.zeroes([23]u8);
     var fbs = std.io.fixedBufferStream(&buf);
     var buf_writer = fbs.writer();
@@ -122,22 +125,22 @@ fn uptime_formatter(allocator: std.mem.Allocator, upt: i64) ![]const u8 {
         .{ .ns = std.time.ns_per_hour, .sep = "h " },
         .{ .ns = std.time.ns_per_min, .sep = "m " },
     }) |unit| {
-        if (val >= unit.ns) {
-            const units = @divTrunc(val, unit.ns);
+        if (upt >= unit.ns) {
+            const units = @divTrunc(upt, unit.ns);
 
             try std.fmt.formatInt(units, 10, .lower, .{}, buf_writer);
             try buf_writer.writeAll(unit.sep);
 
-            val -= units * unit.ns;
+            upt -= units * unit.ns;
 
-            if (val == 0) {
+            if (upt == 0) {
                 break;
             }
         }
     }
 
-    if (val > 0) {
-        const kunits = @divTrunc(val * 1000, std.time.ns_per_s);
+    if (upt > 0) {
+        const kunits = @divTrunc(upt * 1000, std.time.ns_per_s);
 
         if (kunits >= 1000) {
             try std.fmt.formatInt(@divTrunc(kunits, 1000), 10, .lower, .{}, buf_writer);
@@ -153,15 +156,6 @@ fn uptime_formatter(allocator: std.mem.Allocator, upt: i64) ![]const u8 {
     @memcpy(trimmed_buf, trimmed);
 
     return trimmed;
-}
-
-fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
-    const boottime = try sysctl_name(timeval, "kern.boottime");
-    const timestamp = std.time.timestamp();
-
-    const upt = (timestamp - boottime.tv_sec) * BILLION;
-
-    return try uptime_formatter(allocator, upt);
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
