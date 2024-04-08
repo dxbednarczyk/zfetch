@@ -5,7 +5,7 @@ const linux = @import("linux.zig");
 const darwin = @import("darwin.zig");
 
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    var arena = std.heap.ArenaAllocator.init(std.heap.raw_c_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 

@@ -23,13 +23,15 @@ fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
     os_release.arch = @tagName(builtin.cpu.arch);
 
     const os_release_file = try std.fs.openFileAbsolute("/etc/os-release", .{});
+    defer os_release_file.close();
+
     const file_stat = try os_release_file.stat();
 
     const read_bytes = try os_release_file.readToEndAlloc(allocator, file_stat.size);
-    var lines = std.mem.splitAny(u8, read_bytes, "\n");
+    var lines = std.mem.splitScalar(u8, read_bytes, '\n');
 
     while (lines.next()) |line| {
-        var tokens = std.mem.tokenizeAny(u8, line, "=");
+        var tokens = std.mem.tokenizeScalar(u8, line, '=');
 
         const key = tokens.next().?;
         if (std.mem.eql(u8, key, "PRETTY_NAME")) {
@@ -64,10 +66,10 @@ fn get_memory() common.Memory {
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
-    const user = common.get_username(std.os.linux.getuid());
+    const username = common.get_username(std.os.linux.getuid());
     const hostname = try common.get_hostname(allocator);
 
-    const separator = try common.get_separator(allocator, std.mem.len(user), hostname.len);
+    const separator = try common.get_separator(allocator, std.mem.len(username), hostname.len);
 
     const os_release = try get_os_release(allocator);
     const kernel = std.os.uname().release;
@@ -76,5 +78,5 @@ pub fn fetch(allocator: std.mem.Allocator) !void {
     const memory = get_memory();
 
     var stdout = std.io.getStdOut().writer();
-    try stdout.print(LAYOUT, .{ user, hostname, separator, os_release.name, os_release.arch, kernel, uptime, shell, memory.used, memory.total });
+    try stdout.print(LAYOUT, .{ username, hostname, separator, os_release.name, os_release.arch, kernel, uptime, shell, memory.used, memory.total });
 }
