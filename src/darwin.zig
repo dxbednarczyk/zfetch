@@ -89,20 +89,19 @@ fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
 
     var upt = (timestamp - boottime.tv_sec) * BILLION;
 
-    // custom format duration, stripped out of std.fmt.fmtDuration but with
-    // a space at the end of each separator + less values
-    // worst case is 23 bytes:
-    // XXy XXm XXd XXh XXm XXs
+    // stripped out of std.fmt.fmtDuration
     var buf = std.mem.zeroes([23]u8);
     var fbs = std.io.fixedBufferStream(&buf);
     var buf_writer = fbs.writer();
 
-    inline for (.{
+    // zig fmt: off
+    inline for (.{ 
         .{ .ns = 365 * std.time.ns_per_day, .sep = "y " },
         .{ .ns = std.time.ns_per_week, .sep = "w " },
         .{ .ns = std.time.ns_per_day, .sep = "d " },
         .{ .ns = std.time.ns_per_hour, .sep = "h " },
         .{ .ns = std.time.ns_per_min, .sep = "m " },
+        .{ .ns = std.time.ns_per_s, .sep = "s" }
     }) |unit| {
         if (upt >= unit.ns) {
             const units = @divTrunc(upt, unit.ns);
@@ -111,30 +110,13 @@ fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
             try buf_writer.writeAll(unit.sep);
 
             upt -= units * unit.ns;
-
-            if (upt == 0) {
-                break;
-            }
         }
     }
-
-    if (upt > 0) {
-        const kunits = @divTrunc(upt * 1000, std.time.ns_per_s);
-
-        if (kunits >= 1000) {
-            try std.fmt.formatInt(@divTrunc(kunits, 1000), 10, .lower, .{}, buf_writer);
-
-            try buf_writer.writeAll("s");
-        }
-    }
+    // zig fmt: on
 
     const printed = try std.fmt.allocPrint(allocator, "{s}", .{buf});
-    const trimmed = std.mem.trimRight(u8, printed, "\x00");
 
-    const trimmed_buf = try allocator.alloc(u8, trimmed.len);
-    @memcpy(trimmed_buf, trimmed);
-
-    return trimmed;
+    return std.mem.trimRight(u8, printed, "\x00");
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
