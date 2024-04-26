@@ -2,7 +2,7 @@
 
 Linux build depends on `libproc2` (any `procps` >= 4.0).
 
-Runs on `zig` v0.11.0.
+Runs on `zig` v0.12.0.
 
 No colors or logos, just info.
 

@@ -31,7 +31,7 @@ fn sysctl_name(comptime T: type, name: [*:0]const u8) !T {
     var value: T = undefined;
     var len: usize = @sizeOf(T);
 
-    try std.os.sysctlbynameZ(name, &value, &len, null, 0);
+    try std.posix.sysctlbynameZ(name, &value, &len, null, 0);
 
     return value;
 }
@@ -61,7 +61,7 @@ fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
     var len: usize = 8;
     var value = std.mem.zeroes([8]u8);
 
-    try std.os.sysctlbynameZ("kern.osproductversion", &value, &len, null, 0);
+    try std.posix.sysctlbynameZ("kern.osproductversion", &value, &len, null, 0);
 
     const trimmed = std.mem.trimRight(u8, &value, "\x00");
 

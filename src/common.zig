@@ -32,13 +32,13 @@ pub fn get_username(uid: c_uint) [*c]u8 {
 }
 
 pub fn get_hostname(allocator: std.mem.Allocator) ![]const u8 {
-    var buf: [std.os.HOST_NAME_MAX]u8 = undefined;
-    const name = try std.os.gethostname(&buf);
+    var buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    const name = try std.posix.gethostname(&buf);
 
     var split_name = std.mem.splitScalar(u8, name, '.');
     const next = split_name.next().?;
 
-    var hname = try allocator.alloc(u8, next.len);
+    const hname = try allocator.alloc(u8, next.len);
     @memcpy(hname, next);
 
     return hname;
