@@ -7,9 +7,10 @@ const mach = @cImport(@cInclude("mach/mach.h"));
 const vm_stat = @cImport(@cInclude("mach/vm_statistics.h"));
 const host = @cImport(@cInclude("mach/host_info.h"));
 
+const time = @cImport(@cInclude("sys/time.h"));
 const unistd = @cImport(@cInclude("unistd.h"));
 
-const B_MB_RATIO = 1048576;
+const B_MB_RATIO = 1_048_576;
 const BILLION = 1_000_000_000;
 const LAYOUT =
     \\{s}@{s}
@@ -22,12 +23,7 @@ const LAYOUT =
     \\
 ;
 
-const timeval = extern struct {
-    tv_sec: c_int,
-    tv_usec: c_long,
-};
-
-fn sysctl_name(comptime T: type, name: [*:0]const u8) !T {
+inline fn sysctl_name(comptime T: type, name: [*:0]const u8) !T {
     var value: T = undefined;
     var len: usize = @sizeOf(T);
 
@@ -45,7 +41,7 @@ fn get_memory() !common.Memory {
     const ret = mach.host_statistics64(mach.mach_host_self(), host.HOST_VM_INFO64, @ptrCast(&stats), &count);
 
     if (ret != mach.KERN_SUCCESS) {
-        std.process.exit(1);
+        std.process.exit(@intCast(ret));
     }
 
     const b_free: u64 = @as(u64, stats.free_count + stats.inactive_count) * std.mem.page_size;
@@ -84,7 +80,7 @@ fn get_kernel(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
-    const boottime = try sysctl_name(timeval, "kern.boottime");
+    const boottime = try sysctl_name(time.timeval, "kern.boottime");
     const timestamp = std.time.timestamp();
 
     var upt = (timestamp - boottime.tv_sec) * BILLION;
