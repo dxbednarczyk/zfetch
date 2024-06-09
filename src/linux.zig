@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const meminfo = @cImport(@cInclude("libproc2/meminfo.h"));
 const misc = @cImport(@cInclude("libproc2/misc.h"));
+const pwd = @cImport(@cInclude("pwd.h"));
 
 const QUOTATION_MARKS_LEN = 2;
 const LAYOUT =
@@ -66,8 +67,10 @@ fn get_memory() common.Memory {
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
-    const username = common.get_username(std.os.linux.getuid());
-    const hostname = try common.get_hostname(allocator);
+    const username = pwd.getpwuid(std.os.linux.getuid()).*.pw_name;
+
+    var buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    const hostname = try std.posix.gethostname(&buf);
 
     const separator = try common.get_separator(allocator, std.mem.len(username), hostname.len);
 

@@ -9,6 +9,7 @@ const host = @cImport(@cInclude("mach/host_info.h"));
 
 const time = @cImport(@cInclude("sys/time.h"));
 const unistd = @cImport(@cInclude("unistd.h"));
+const pwd = @cImport(@cInclude("pwd.h"));
 
 const B_MB_RATIO = 1_048_576;
 const BILLION = 1_000_000_000;
@@ -116,8 +117,10 @@ fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
-    const username = common.get_username(unistd.geteuid());
-    const hostname = try common.get_hostname(allocator);
+    const username = pwd.getpwuid(unistd.geteuid()).*.pw_name;
+
+    var buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    const hostname = try std.posix.gethostname(&buf);
 
     const separator = try common.get_separator(allocator, std.mem.len(username), hostname.len);
 
