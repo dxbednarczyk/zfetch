@@ -54,7 +54,7 @@ fn get_memory() common.Memory {
 
     const rc = meminfo.procps_meminfo_new(@ptrCast(&info));
     if (rc < 0) {
-        std.os.exit(@as(u8, @intCast(-rc)));
+        std.process.exit(@as(u8, @intCast(-rc)));
     }
 
     const used: c_uint = @intCast(meminfo.procps_meminfo_get(info, meminfo.MEMINFO_MEM_USED).*.result.s_int);
@@ -75,7 +75,7 @@ pub fn fetch(allocator: std.mem.Allocator) !void {
     const separator = try common.get_separator(allocator, std.mem.len(username), hostname.len);
 
     const os_release = try get_os_release(allocator);
-    const kernel = std.os.uname().release;
+    const kernel = std.posix.uname().release;
     const uptime = misc.procps_uptime_sprint_short();
     const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
     const memory = get_memory();
