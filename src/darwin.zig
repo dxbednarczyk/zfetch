@@ -8,33 +8,53 @@ const vm_stat = @cImport(@cInclude("mach/vm_statistics.h"));
 const host = @cImport(@cInclude("mach/host_info.h"));
 
 const time = @cImport(@cInclude("sys/time.h"));
+const sysctl = @cImport(@cInclude("sys/sysctl.h"));
+
 const unistd = @cImport(@cInclude("unistd.h"));
 const pwd = @cImport(@cInclude("pwd.h"));
 
 const B_MB_RATIO = 1_048_576;
 const BILLION = 1_000_000_000;
+
+const OSPRODUCTVERSION = 142;
+
 const LAYOUT =
     \\{s}@{s}
     \\{s}
     \\os       macOS {s} {s}
-    \\kernel   {s}
+    \\kernel   Darwin {s}
     \\uptime   up {s}
     \\shell    {s}
     \\memory   {d}M / {d}M
     \\
 ;
 
-inline fn sysctl_name(comptime T: type, name: [*:0]const u8) !T {
+fn get_string(allocator: std.mem.Allocator, mib: []c_int) ![]u8 {
+    var len: usize = undefined;
+
+    try std.posix.sysctl(mib, null, &len, null, 0);
+
+    const buf = try allocator.alloc(u8, len);
+
+    try std.posix.sysctl(mib, @ptrCast(buf), &len, null, 0);
+
+    return buf;
+}
+
+fn get(comptime T: type, mib: []c_int) !T {
     var value: T = undefined;
     var len: usize = @sizeOf(T);
 
-    try std.posix.sysctlbynameZ(name, &value, &len, null, 0);
+    try std.posix.sysctl(mib, &value, &len, null, 0);
 
     return value;
 }
 
 fn get_memory() !common.Memory {
-    const mb_total = @divTrunc(try sysctl_name(u64, "hw.memsize"), B_MB_RATIO);
+    var mib = [2]c_int{ sysctl.CTL_HW, sysctl.HW_MEMSIZE };
+    const res = try get(usize, &mib);
+
+    const mb_total = @divTrunc(res, B_MB_RATIO);
 
     var stats: vm_stat.vm_statistics64 = undefined;
     var count: c_uint = @sizeOf(host.vm_statistics64_data_t) / @sizeOf(c_int);
@@ -55,33 +75,15 @@ fn get_memory() !common.Memory {
 }
 
 fn get_os_release(allocator: std.mem.Allocator) !common.OSRelease {
-    var len: usize = 8;
-    var value = std.mem.zeroes([8]u8);
+    var mib = [2]c_int{ sysctl.CTL_KERN, OSPRODUCTVERSION };
+    const os = try get_string(allocator, &mib);
 
-    try std.posix.sysctlbynameZ("kern.osproductversion", &value, &len, null, 0);
-
-    const trimmed = std.mem.trimRight(u8, &value, "\x00");
-
-    const trimmed_buf = try allocator.alloc(u8, trimmed.len);
-    @memcpy(trimmed_buf, trimmed);
-
-    return common.OSRelease{ .name = trimmed_buf, .arch = @tagName(builtin.cpu.arch) };
-}
-
-fn get_kernel(allocator: std.mem.Allocator) ![]const u8 {
-    const kern = try sysctl_name([128]u8, "kern.version");
-
-    var split_kern = std.mem.splitScalar(u8, &kern, ':');
-    const next = split_kern.next().?;
-
-    const kernbuf = try allocator.alloc(u8, next.len);
-    @memcpy(kernbuf, next);
-
-    return kernbuf;
+    return common.OSRelease{ .name = os, .arch = @tagName(builtin.cpu.arch) };
 }
 
 fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
-    const boottime = try sysctl_name(time.timeval, "kern.boottime");
+    var mib = [2]c_int{ sysctl.CTL_KERN, sysctl.KERN_BOOTTIME };
+    const boottime = try get(time.timeval, &mib);
     const timestamp = std.time.timestamp();
 
     var upt = (timestamp - boottime.tv_sec) * BILLION;
@@ -112,8 +114,7 @@ fn get_uptime(allocator: std.mem.Allocator) ![]const u8 {
     // zig fmt: on
 
     const printed = try std.fmt.allocPrint(allocator, "{s}", .{buf});
-
-    return std.mem.trimRight(u8, printed, "\x00");
+    return std.mem.sliceTo(printed, '\x00');
 }
 
 pub fn fetch(allocator: std.mem.Allocator) !void {
@@ -123,9 +124,11 @@ pub fn fetch(allocator: std.mem.Allocator) !void {
     const hostname = try std.posix.gethostname(&buf);
 
     const separator = try common.get_separator(allocator, std.mem.len(username), hostname.len);
-
     const os_release = try get_os_release(allocator);
-    const kernel = try get_kernel(allocator);
+
+    var mib = [2]c_int{ sysctl.CTL_KERN, sysctl.KERN_OSRELEASE };
+    const kernel = try get_string(allocator, &mib);
+
     const uptime = try get_uptime(allocator);
     const shell = try std.process.getEnvVarOwned(allocator, "SHELL");
     const memory = try get_memory();
